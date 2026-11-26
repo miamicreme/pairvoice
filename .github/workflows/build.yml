@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: 22
       - name: Install
-        run: npm install
+        run: npm ci
       - name: Typecheck
         run: npm run typecheck
       - name: Unit tests
@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 10
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_PASSWORD: postgres
         ports:
@@ -70,4 +70,4 @@ jobs:
             psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$testfile"
           done
       - name: Backup and restore drill
-        run: bash scripts/verify-backup-restore.sh
+        run: docker exec -i -e PGPASSWORD=postgres "${{ job.services.postgres.id }}" bash -s < scripts/verify-backup-restore.sh

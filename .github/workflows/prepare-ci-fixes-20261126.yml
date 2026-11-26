@@ -1,0 +1,34 @@
+name: Prepare CI security and restore fixes
+on:
+  push:
+    branches: [fix/ci-security-and-restore-20261126]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Resolve current patched Next.js 16 and pin lockfile
+        run: npm install next@16 --save-exact --ignore-scripts
+      - name: Reinstall from lockfile
+        run: npm ci
+      - name: Verify security, types, unit tests and build
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm run typecheck
+          npm test
+          npm run build
+      - name: Commit only verified dependency changes
+        run: |
+          git config user.name "PairVoice CI"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Pin security-patched Next.js and refresh lockfile"
+            git push origin HEAD
+          fi
