@@ -1,0 +1,63 @@
+name: Recover original PairVoice Git history
+on:
+  push:
+    branches: [ops/recover-original-history-20261126]
+permissions:
+  contents: write
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Preserve complete source history and recover branch refs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --bare https://github.com/Kohronburton/PairVoice.git "$RUNNER_TEMP/source.git"
+          source="$RUNNER_TEMP/source.git"
+          destination="https://x-access-token:$GH_TOKEN@github.com/miamicreme/pairvoice.git"
+          git -C "$source" remote add destination "$destination"
+          git -C "$source" bundle create "$RUNNER_TEMP/pairvoice-original.bundle" --branches --tags
+          git -C "$source" bundle verify "$RUNNER_TEMP/pairvoice-original.bundle"
+          git -C "$source" for-each-ref --format='%(objectname) %(refname)' refs/heads refs/tags > "$RUNNER_TEMP/source-refs.txt"
+          mkdir "$RUNNER_TEMP/archive"
+          cp "$RUNNER_TEMP/pairvoice-original.bundle" "$RUNNER_TEMP/source-refs.txt" "$RUNNER_TEMP/archive/"
+          cd "$RUNNER_TEMP/archive"
+          git init -q
+          git config user.name "PairVoice Repository Recovery"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          sha256sum pairvoice-original.bundle > SHA256SUMS
+          git add .
+          git commit -qm "Preserve complete original PairVoice branches and Git history"
+          git push "$destination" HEAD:refs/heads/archive/original-git-history-2026-11-26
+          git -C "$source" ls-remote --heads destination > "$RUNNER_TEMP/destination-refs.txt"
+          recovered=0
+          failed=0
+          while read -r oid ref; do
+            case "$ref" in
+              refs/heads/*)
+                name="${ref#refs/heads/}"
+                existing="$(awk -v ref="$ref" '$2==ref {print $1}' "$RUNNER_TEMP/destination-refs.txt")"
+                if [[ "$existing" == "$oid" ]]; then
+                  recovered=$((recovered+1))
+                  continue
+                fi
+                target="$ref"
+                if [[ -n "$existing" ]]; then
+                  target="refs/heads/archive/source-history/$name"
+                fi
+                ;;
+              refs/tags/*) target="$ref" ;;
+              *) continue ;;
+            esac
+            if git -C "$source" push destination "$oid:$target"; then
+              recovered=$((recovered+1))
+            else
+              failed=$((failed+1))
+              echo "Could not create $target; exact original history is preserved in the verified bundle."
+            fi
+          done < "$RUNNER_TEMP/source-refs.txt"
+          printf 'Original refs recovered: %s; ref pushes failed: %s\n' "$recovered" "$failed" | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$failed" -eq 0
