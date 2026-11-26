@@ -1,17 +1,8 @@
-import type { Metadata } from 'next';
-import './globals.css';
-import './invite.css';
-import './mobile.css';
-
-export const metadata: Metadata = {
-  title: 'PairVoice | Get Paid for Voice Work',
-  description: 'Join PairVoice for paid voice recording opportunities across languages and accents.',
-  icons: {
-    icon: '/favicon.svg',
-    shortcut: '/favicon.svg',
-  },
+import type {Metadata} from 'next';import './globals.css';
+export const metadata:Metadata={
+ title:'PairVoice | Paid Voice Opportunities',
+ description:'Join PairVoice free and get notified about paid voice-recording projects matched to your language and location.',
+ robots:{index:true,follow:true},
+ openGraph:{title:'PairVoice — Your Voice Has Value',description:'Join free for early access to paid voice-recording opportunities.',type:'website'}
 };
-
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
-}
+export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body>{children}</body></html>}

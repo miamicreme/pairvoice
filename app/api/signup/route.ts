@@ -1,66 +1,28 @@
-import{NextRequest,NextResponse}from'next/server';
-import{isValidEmail,normalizeEmail,normalizePhone}from'../../../lib/validation';
-import{serviceClient}from'../../../lib/supabase-server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-export async function POST(req:NextRequest){
- try{
-  const b=await req.json(),email=normalizeEmail(b.email);
-  const countryCode=String(b.countryCode||'').toUpperCase();
-  const phone=normalizePhone(b.phone,countryCode);
-  if(!b.campaign)return NextResponse.json({error:'Select a gig before creating your account.',code:'MISSING_CAMPAIGN'},{status:400});
-  if(!String(b.firstName||'').trim())return NextResponse.json({error:'Enter your first name.',code:'MISSING_FIRST_NAME'},{status:400});
-  if(!isValidEmail(email))return NextResponse.json({error:'Enter a valid email address.',code:'INVALID_EMAIL'},{status:400});
-  if(!countryCode||!b.languageCode)return NextResponse.json({error:'This gig is missing country or language settings.',code:'INVALID_GIG_CONFIG'},{status:400});
-  if(!phone)return NextResponse.json({error:'Enter a valid phone number for this country.',code:'INVALID_PHONE'},{status:400});
-  if(b.is18Plus!==true)return NextResponse.json({error:'Confirm that you are 18 or older.',code:'AGE_REQUIRED'},{status:400});
-  if(b.consent!==true)return NextResponse.json({error:'Agree to the required account and gig communications.',code:'CONSENT_REQUIRED'},{status:400});
+function defaultCampaignForCountry(country:string){
+ if(country==='United States') return 'us-english-v1';
+ if(country==='Spain') return 'es-spain-v1';
+ return null;
+}
 
-  const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,edgeSecret=process.env.PAIRVOICE_EDGE_SHARED_SECRET;
-  if(!url||!key||!edgeSecret)return NextResponse.json({error:'Signup service is not configured.'},{status:503});
-
-  const response=await fetch(url+'/functions/v1/pairvoice-signup',{
-   method:'POST',
-   headers:{'content-type':'application/json','apikey':key,'x-pairvoice-edge-secret':edgeSecret},
-   body:JSON.stringify({
-    campaign:String(b.campaign),
-    firstName:String(b.firstName).trim(),
-    email,
-    phone,
-    countryCode,
-    languageCode:String(b.languageCode).toLowerCase(),
-    is18Plus:true,
-    consent:true,
-    marketingConsent:b.marketingConsent===true,
-    ref:b.ref?String(b.ref).toUpperCase():null,
-    partnerCode:b.partnerCode?String(b.partnerCode).trim().toUpperCase():null
-   }),
-   cache:'no-store'
-  });
-
-  const data=await response.json().catch(()=>({error:'Unable to complete signup.'}));
-  if(!response.ok)return NextResponse.json({
-   error:data.error||'Unable to complete signup.',
-   ...(data.code?{code:data.code}:{})
-  },{status:response.status});
-  let partnerLinkStatus:string|undefined;
-  if(b.partnerCode){
-   const db=serviceClient();
-   const {data:participant}=await db.from('participants').select('id').eq('email',email).maybeSingle();
-   if(participant?.id){
-    const {error:partnerError}=await db.rpc('request_existing_partner',{
-     p_requester_id:participant.id,
-     p_target_public_code:String(b.partnerCode).trim().toUpperCase(),
-     p_campaign_slug:String(b.campaign)
-    });
-    if(partnerError){
-     console.error('partner invite handoff failed',partnerError.message);
-     partnerLinkStatus='NEEDS_RETRY';
-    }else partnerLinkStatus='PENDING';
-   }else partnerLinkStatus='NEEDS_RETRY';
-  }
-  return NextResponse.json({...data,...(partnerLinkStatus?{partnerLinkStatus}:{})});
- }catch(e){
-  console.error(e);
-  return NextResponse.json({error:'Unable to complete signup.'},{status:500});
- }
+export async function POST(req: NextRequest) {
+ try {
+  const body = await req.json();
+  const { firstName,email,phone,country,language,accent,ref,campaign,is18Plus,consent } = body;
+  if (!firstName || !email || !country || !language || !accent || is18Plus!==true || consent!==true) return NextResponse.json({error:'Missing required fields'},{status:400});
+  const url=process.env.NEXT_PUBLIC_SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if(!url||!key) return NextResponse.json({error:'Signup service is not configured'},{status:503});
+  const db=createClient(url,key,{auth:{persistSession:false}});
+  let referredBy=null, campaignId=null;
+  if(ref){ const {data}=await db.from('profiles').select('id').eq('referral_code',String(ref).toUpperCase()).maybeSingle(); referredBy=data?.id??null; }
+  const campaignSlug=campaign||defaultCampaignForCountry(String(country));
+  if(campaignSlug){ const {data}=await db.from('campaigns').select('id').eq('slug',campaignSlug).maybeSingle(); campaignId=data?.id??null; }
+  const {data,error}=await db.from('profiles').insert({first_name:String(firstName).trim(),email:String(email).trim().toLowerCase(),phone:phone||null,country,primary_language:language,accent:String(accent).trim(),referred_by:referredBy,campaign_id:campaignId,is_18_plus:true,consent_contact:true}).select('id,referral_code').single();
+  if(error){ if(error.code==='23505') return NextResponse.json({error:'This email is already registered.'},{status:409}); throw error; }
+  const {data:pair,error:pairError}=await db.from('pairs').insert({user_a:data.id}).select('invite_code').single();
+  if(pairError) throw pairError;
+  return NextResponse.json({ok:true,referralCode:data.referral_code,inviteCode:pair.invite_code});
+ } catch(e){ console.error(e); return NextResponse.json({error:'Unable to complete signup.'},{status:500}); }
 }
