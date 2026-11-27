@@ -55,7 +55,7 @@ projects:
             name: pairvoice-production
             runtime: node
             region: virginia
-            plan: starter
+            plan: free
             branch: main
             buildCommand: npm ci && npm run build
             startCommand: npm start
