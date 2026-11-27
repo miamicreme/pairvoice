@@ -1,0 +1,98 @@
+# New-account bootstrap. No cron worker or live payout configuration until staging acceptance.
+projects:
+  - name: PairVoice
+    environments:
+      - name: Staging
+        services:
+          - type: web
+            name: pairvoice-staging
+            runtime: node
+            region: virginia
+            plan: free
+            branch: fix/p0-payout-privacy-20261127
+            buildCommand: npm ci && npm run build
+            startCommand: npm start
+            healthCheckPath: /api/health
+            autoDeployTrigger: off
+            envVars:
+              - key: NODE_ENV
+                value: production
+              - key: PAYPAL_MODE
+                value: sandbox
+              - key: PAIRVOICE_EMAIL_FROM
+                value: PairVoice Staging <hello@pairvoice.com>
+              - key: NEXT_PUBLIC_SUPABASE_URL
+                sync: false
+              - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+                sync: false
+              - key: SUPABASE_SERVICE_ROLE_KEY
+                sync: false
+              - key: RESEND_API_KEY
+                sync: false
+              - key: NEXT_PUBLIC_SITE_URL
+                sync: false
+              - key: PAIRVOICE_ADMIN_USER
+                sync: false
+              - key: PAIRVOICE_ADMIN_PASSWORD
+                sync: false
+              - key: PAIRVOICE_INTERNAL_SECRET
+                sync: false
+              - key: PAIRVOICE_OWNER_EMAIL
+                sync: false
+              - key: PAIRVOICE_EDGE_SHARED_SECRET
+                sync: false
+              - key: PAIRVOICE_CREDENTIAL_ENCRYPTION_KEY
+                sync: false
+              - key: PAYPAL_CLIENT_ID
+                sync: false
+              - key: PAYPAL_CLIENT_SECRET
+                sync: false
+              - key: PAYPAL_WEBHOOK_ID
+                sync: false
+      - name: Production
+        services:
+          - type: web
+            name: pairvoice-production
+            runtime: node
+            region: virginia
+            plan: starter
+            branch: main
+            buildCommand: npm ci && npm run build
+            startCommand: npm start
+            healthCheckPath: /api/health
+            autoDeployTrigger: off
+            envVars:
+              - key: NODE_ENV
+                value: production
+              - key: PAYPAL_MODE
+                value: sandbox
+              - key: PAIRVOICE_EMAIL_FROM
+                value: PairVoice <hello@pairvoice.com>
+              - key: NEXT_PUBLIC_SUPABASE_URL
+                sync: false
+              - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+                sync: false
+              - key: SUPABASE_SERVICE_ROLE_KEY
+                sync: false
+              - key: RESEND_API_KEY
+                sync: false
+              - key: NEXT_PUBLIC_SITE_URL
+                sync: false
+              - key: PAIRVOICE_ADMIN_USER
+                sync: false
+              - key: PAIRVOICE_ADMIN_PASSWORD
+                sync: false
+              - key: PAIRVOICE_INTERNAL_SECRET
+                sync: false
+              - key: PAIRVOICE_OWNER_EMAIL
+                sync: false
+              - key: PAIRVOICE_EDGE_SHARED_SECRET
+                sync: false
+              - key: PAIRVOICE_CREDENTIAL_ENCRYPTION_KEY
+                sync: false
+              - key: PAYPAL_CLIENT_ID
+                sync: false
+              - key: PAYPAL_CLIENT_SECRET
+                sync: false
+              - key: PAYPAL_WEBHOOK_ID
+                sync: false
