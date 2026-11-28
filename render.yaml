@@ -30,6 +30,10 @@ services:
         sync: false
       - key: PAIRVOICE_OWNER_EMAIL
         sync: false
+      - key: PAIRVOICE_EDGE_SHARED_SECRET
+        sync: false
+      - key: PAIRVOICE_CREDENTIAL_ENCRYPTION_KEY
+        sync: false
       - key: PAYPAL_MODE
         sync: false
       - key: PAYPAL_CLIENT_ID

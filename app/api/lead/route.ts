@@ -1,6 +1,7 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {clampText,isValidEmail,normalizeEmail,normalizeMarket,normalizePhone} from '../../../lib/validation';
 import {sendEarlyAccessWelcome,sendPartnerJoinedEmail} from '../../../lib/email';
+import {publicLeadResponse,type LeadEdgeResult} from '../../../lib/lead-response';
 
 function publicOrigin(req:NextRequest){
  const configured=(process.env.NEXT_PUBLIC_SITE_URL||'').replace(/\/$/,'');
@@ -45,7 +46,7 @@ export async function POST(req:NextRequest){
   const data=await edge.json().catch(()=>({error:'Unable to create account.'}));
   if(!edge.ok)return NextResponse.json({error:data.error||'Unable to create account.'},{status:edge.status});
 
-  const result=(data||{}) as {inviteCode?:string;languageCode?:'en'|'es';partnerJoined?:boolean;referrerEmail?:string;referrerFirstName?:string;referrerLanguage?:'en'|'es'};
+  const result=(data||{}) as LeadEdgeResult;
   const site=publicOrigin(req),inviteUrl=`${site}/invite/${encodeURIComponent(result.inviteCode||'')}`;
 
   let emailStatus={sent:false,queued:true};
@@ -57,6 +58,7 @@ export async function POST(req:NextRequest){
    catch(e){console.error('partner joined email failed',e)}
   }
 
-  return NextResponse.json({...result,inviteUrl,emailStatus,phoneCaptured:true});
+  // CR-04: never spread the edge result; referrer details stay server-side.
+  return NextResponse.json(publicLeadResponse(result,{inviteUrl,emailStatus}));
  }catch(e){console.error(e);return NextResponse.json({error:'Unable to create account.'},{status:500})}
 }

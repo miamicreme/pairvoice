@@ -11,22 +11,25 @@ export async function GET(){
  return NextResponse.json({methods:data||[]});
 }
 
+// CR-01: status changes go through set_payout_method_status, which verifies or disables the
+// method, maintains exactly one default per participant and writes the audit event in one
+// transaction. Previously only status was updated and no method ever became the default.
 export async function PATCH(req:NextRequest){
  const admin=await requireAdmin(['SUPER_ADMIN','PAYMENTS']);
  if(!admin)return NextResponse.json({error:'Forbidden'},{status:403});
  try{
-  const b=await req.json(),status=String(b.status||'').toUpperCase();
-  if(!b.methodId||!['VERIFIED','DISABLED'].includes(status)||!String(b.reason||'').trim())
+  const b=await req.json(),status=String(b.status||'').toUpperCase(),reason=String(b.reason||'').trim();
+  if(!b.methodId||!['VERIFIED','DISABLED'].includes(status)||!reason)
    return NextResponse.json({error:'methodId, VERIFIED/DISABLED status and reason are required.'},{status:400});
-  const {data:before}=await admin.db.from('participant_payout_methods').select('id,participant_id,provider,status,is_default').eq('id',String(b.methodId)).maybeSingle();
-  if(!before)return NextResponse.json({error:'Payout method not found.'},{status:404});
-  const {error}=await admin.db.from('participant_payout_methods').update({status}).eq('id',before.id);
-  if(error)return NextResponse.json({error:'Unable to update payout method.'},{status:500});
-  await admin.db.from('audit_events').insert({
-   actor_user_id:admin.user.id,actor_label:`ADMIN:${admin.role}`,role:admin.role,
-   operation:'PAYOUT_METHOD_'+status,resource_type:'PAYOUT_METHOD',resource_id:before.id,
-   before_data:{status:before.status,provider:before.provider},after_data:{status,provider:before.provider},reason:String(b.reason)
+  const {data,error}=await admin.db.rpc('set_payout_method_status',{
+   p_method_id:String(b.methodId),p_status:status,p_actor_user_id:admin.user.id,
+   p_actor_label:`ADMIN:${admin.role}`,p_role:admin.role,p_reason:reason
   });
-  return NextResponse.json({ok:true});
+  if(error){
+   if(/payout_method_not_found/.test(error.message))return NextResponse.json({error:'Payout method not found.'},{status:404});
+   if(/disabled_payout_method_cannot_be_verified/.test(error.message))return NextResponse.json({error:'A disabled payout method cannot be verified. Ask the participant to add it again.'},{status:409});
+   console.error(error);return NextResponse.json({error:'Unable to update payout method.'},{status:500});
+  }
+  return NextResponse.json(data||{ok:true});
  }catch(e){console.error(e);return NextResponse.json({error:'Unable to update payout method.'},{status:500})}
 }
